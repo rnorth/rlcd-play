@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Parallel Constrained vs Normal Inference (Qwen2.5 1.5B)</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="container">
+    <!-- Centered Controls -->
+    <div class="controls-bar">
+      <select id="preset-select" aria-label="Select Scenario Preset"></select>
+      <button id="btn-run" class="btn-primary">
+        <span>⚡ Run Comparison</span>
+      </button>
+    </div>
+
+    <!-- Speedup Summary Banner (Shows after run) -->
+    <div id="summary-bar" class="summary-bar hidden">
+      <div class="summary-pill">
+        <span class="summary-highlight" id="sum-speedup">2.4x FASTER</span>
+        <span class="summary-sep">·</span>
+        <span id="sum-times">180 ms vs 435 ms</span>
+      </div>
+    </div>
+
+    <!-- Side by Side Main View -->
+    <main class="grid">
+      <!-- Left: Parallel Constrained -->
+      <section class="card card-parallel">
+        <div class="card-header">
+          <h2>Parallel Constrained (Qwen2.5 1.5B)</h2>
+          <span class="timer-badge badge-green" id="timer-parallel">0.0 ms</span>
+        </div>
+        <div class="card-body" id="body-parallel">
+          <pre id="parallel-output" class="code-box"><span class="placeholder-text">Click "Run Comparison" to start...</span></pre>
+        </div>
+      </section>
+
+      <!-- Right: Normal Autoregressive -->
+      <section class="card">
+        <div class="card-header">
+          <div class="title-with-badge">
+            <h2>Normal Inference (Qwen2.5 1.5B)</h2>
+            <span id="badge-naive-hallucinated" class="badge-red hidden">0 fields hallucinated</span>
+          </div>
+          <span class="timer-badge" id="timer-naive">0.0 ms</span>
+        </div>
+        <div class="card-body" id="body-naive">
+          <pre id="stream-output" class="code-box"><span class="placeholder-text">Click "Run Comparison" to start...</span></pre>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
