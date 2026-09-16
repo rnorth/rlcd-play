@@ -19,6 +19,8 @@ spaces:
 
 # Qwen2.5-1.5B-Instruct with Parallel Constrained Decoding
 
+[![Open in Spaces](https://huggingface.co/datasets/huggingface/badges/resolve/main/open-in-hf-spaces-sm.svg)](https://huggingface.co/spaces/drinkmoonshine/parallel-constrained-decoding)
+
 > **Live Demo**: Try the side-by-side comparison live on Hugging Face Spaces: [drinkmoonshine/parallel-constrained-decoding](https://huggingface.co/spaces/drinkmoonshine/parallel-constrained-decoding).
 
 This repository provides an inference implementation for structured JSON generation and high-cardinality classification using `mlx-community/Qwen2.5-1.5B-Instruct-4bit` on Apple Silicon.
