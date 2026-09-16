@@ -137,7 +137,6 @@ class StructuredSchema:
             return self._parallel_metadata
             
         import os
-        import mlx.core as mx
         field_items = list(self.fields.items())
         suffix_tok_lists = []
         suffix_lengths = []
@@ -171,7 +170,11 @@ class StructuredSchema:
         max_s_len = max(suffix_lengths)
         pad_id = tokenizer.pad_token_id or 0
         padded = [s + [pad_id] * (max_s_len - len(s)) for s in suffix_tok_lists]
-        suffixes_batch = mx.array(padded, dtype=mx.int32)
+        try:
+            import mlx.core as mx
+            suffixes_batch = mx.array(padded, dtype=mx.int32)
+        except Exception:
+            suffixes_batch = np.array(padded, dtype=np.int32)
         
         self._parallel_metadata = {
             "field_items": field_items,

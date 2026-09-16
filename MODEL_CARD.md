@@ -13,9 +13,13 @@ tags:
 - json
 pipeline_tag: text-generation
 base_model: Qwen/Qwen2.5-1.5B-Instruct
+spaces:
+- drinkmoonshine/parallel-constrained-decoding
 ---
 
 # Qwen2.5-1.5B-Instruct with Parallel Constrained Decoding
+
+> **Live Demo**: Try the side-by-side comparison live on Hugging Face Spaces: [drinkmoonshine/parallel-constrained-decoding](https://huggingface.co/spaces/drinkmoonshine/parallel-constrained-decoding).
 
 This repository provides an inference implementation for structured JSON generation and high-cardinality classification using `mlx-community/Qwen2.5-1.5B-Instruct-4bit` on Apple Silicon.
 

@@ -13,9 +13,13 @@ tags:
 - json
 pipeline_tag: text-generation
 base_model: Qwen/Qwen2.5-1.5B-Instruct
+spaces:
+- drinkmoonshine/parallel-constrained-decoding
 ---
 
 # Parallel Constrained Decoding for Apple Silicon
+
+> **Live Demo**: Try the side-by-side comparison live on Hugging Face Spaces: [drinkmoonshine/parallel-constrained-decoding](https://huggingface.co/spaces/drinkmoonshine/parallel-constrained-decoding).
 
 A high-throughput inference engine for structured information extraction, decision routing, and categorical classification on Apple Silicon using MLX.
 
