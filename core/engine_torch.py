@@ -67,6 +67,73 @@ def get_torch_engine():
     return _torch_model, _torch_tokenizer, _torch_device
 
 
+def _resolve_collision_torch(model, batched_cache, base_len, row, suffix_len, cached_len,
+                             field_logits, seqs, quote_id, temperature, device):
+    """
+    Torch counterpart of the MLX collision resolver.
+
+    Choices that share a first token cannot be separated by a single-token score, so the
+    decision is walked one token deeper at a time, constrained at each step to tokens that
+    keep at least one declared choice reachable, until one choice survives. A closing quote
+    terminates each choice so a choice that is a strict prefix of another stays separable.
+
+    Returns (winner_idx, winner_prob, all_probs, extra_passes).
+    """
+    true_len = base_len + suffix_len
+    f_cache = copy.deepcopy(batched_cache)
+    f_cache.batch_select_indices(torch.tensor([row], device=device))
+    # Drop this row's batch padding so the walk continues from the field's own suffix.
+    overshoot = cached_len - true_len
+    if overshoot > 0:
+        f_cache.crop(-overshoot)
+
+    alive = list(range(len(seqs)))
+    cur_logits = field_logits
+    path_prob = 1.0
+    step = 0
+    extra_passes = 0
+
+    # Choices are unique (enforced in FieldDefinition), so the walk always separates
+    # them within the longest choice's length; the cap is a guard against a future
+    # change letting two choices tokenize identically and spinning here forever.
+    max_steps = max((len(s) for s in seqs), default=0) + 1
+
+    while len(alive) > 1 and step < max_steps:
+        branches = {}
+        for ci in alive:
+            nxt = seqs[ci][step] if step < len(seqs[ci]) else quote_id
+            branches.setdefault(nxt, []).append(ci)
+
+        if len(branches) > 1:
+            tok_ids = list(branches)
+            scores = torch.tensor(
+                [float(cur_logits[t].item()) for t in tok_ids], dtype=torch.float32
+            ) / max(temperature, 1e-4)
+            probs = F.softmax(scores, dim=-1)
+            k = int(torch.argmax(probs).item())
+            path_prob *= float(probs[k].item())
+            chosen = tok_ids[k]
+        else:
+            chosen = next(iter(branches))
+
+        alive = branches[chosen]
+        step += 1
+        if len(alive) > 1:
+            with torch.no_grad():
+                out_step = model(
+                    torch.tensor([[chosen]], dtype=torch.long, device=device),
+                    past_key_values=f_cache,
+                )
+            cur_logits = out_step.logits[0, -1, :]
+            extra_passes += 1
+
+    w_idx = alive[0]
+    spread = (1.0 - path_prob) / max(len(seqs) - 1, 1)
+    all_probs = [spread] * len(seqs)
+    all_probs[w_idx] = path_prob
+    return w_idx, path_prob, all_probs, extra_passes
+
+
 @gpu_decorator
 def run_parallel_generation_torch(
     context: str,
@@ -137,18 +204,27 @@ def run_parallel_generation_torch(
     # 4. Slicing, Disambiguation & Softmax
     parsed_json = {}
     field_telemetry = {}
+    collision_passes = 0
 
     for i, (fname, fdef) in enumerate(field_items):
         decision_idx = suffix_lengths[i] - 1
         field_logits = suffix_out[i, decision_idx, :]
         cand_tokens = cands_per_field[i]
 
-        scores = [float(field_logits[tid].item()) for tid in cand_tokens]
-        scores_t = torch.tensor(scores, dtype=torch.float32) / max(temperature, 1e-4)
-        probs = F.softmax(scores_t, dim=-1).tolist()
-        w_idx = int(torch.argmax(scores_t).item())
-        w_prob = float(probs[w_idx])
-        all_probs = probs
+        if has_collisions[i]:
+            w_idx, w_prob, all_probs, extra = _resolve_collision_torch(
+                model, batched_cache, prefix_len, i, suffix_lengths[i],
+                prefix_len + suffix_arr.shape[1], field_logits,
+                meta["choice_seqs"][i], meta["quote_id"], temperature, device
+            )
+            collision_passes += extra
+        else:
+            scores = [float(field_logits[tid].item()) for tid in cand_tokens]
+            scores_t = torch.tensor(scores, dtype=torch.float32) / max(temperature, 1e-4)
+            probs = F.softmax(scores_t, dim=-1).tolist()
+            w_idx = int(torch.argmax(scores_t).item())
+            w_prob = float(probs[w_idx])
+            all_probs = probs
 
         if fdef.field_type == "boolean":
             val = (w_idx == 0)
@@ -182,7 +258,7 @@ def run_parallel_generation_torch(
         "prefill_ms": round(t_prefill, 2),
         "suffix_eval_ms": round(t_suffix_eval, 2),
         "total_tokens_generated": 0,
-        "sequential_forward_passes": 1,
+        "sequential_forward_passes": 1 + collision_passes,
         "is_valid_json": True,
         "schema_match": True,
         "parsed_json": parsed_json,
