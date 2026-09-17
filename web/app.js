@@ -7,6 +7,9 @@ const $ = (id) => document.getElementById(id);
 const els = {
   presetSelect: $('preset-select'),
   btnRun: $('btn-run'),
+  contextInput: $('context-input'),
+  contextHint: $('context-hint'),
+  btnResetContext: $('btn-reset-context'),
   summaryBar: $('summary-bar'),
   sumSpeedup: $('sum-speedup'),
   sumTimes: $('sum-times'),
@@ -174,6 +177,20 @@ function setupRowHoverSync() {
   });
 }
 
+// Context Document Editing
+function loadContextFromPreset() {
+  els.contextInput.value = activePreset ? (activePreset.context || '') : '';
+  updateContextHint();
+}
+
+function updateContextHint() {
+  const presetContext = activePreset ? (activePreset.context || '') : '';
+  const isEdited = els.contextInput.value !== presetContext;
+  els.contextHint.textContent = isEdited ? 'edited' : 'edit to try your own input';
+  els.contextHint.classList.toggle('edited', isEdited);
+  els.btnResetContext.disabled = !isEdited;
+}
+
 // Initialize
 async function init() {
   setupScrollSync();
@@ -197,10 +214,16 @@ async function init() {
     console.error('Error loading presets:', e);
   }
 
+  loadContextFromPreset();
+
   els.presetSelect.addEventListener('change', (e) => {
     activePreset = presets.find(p => p.id === e.target.value);
+    loadContextFromPreset();
     reset();
   });
+
+  els.contextInput.addEventListener('input', updateContextHint);
+  els.btnResetContext.addEventListener('click', loadContextFromPreset);
 
   els.btnRun.addEventListener('click', runComparison);
 }
@@ -350,13 +373,21 @@ async function streamNaive(payload) {
 // Side-by-Side Comparison Runner
 async function runComparison() {
   if (!activePreset) return;
-  
+
+  const context = els.contextInput.value.trim();
+  if (!context) {
+    // Open before focusing: a textarea inside a closed <details> is not focusable.
+    $('context-panel').open = true;
+    els.contextInput.focus();
+    return;
+  }
+
   reset();
   els.btnRun.disabled = true;
   els.btnRun.textContent = 'Running...';
   
   const payload = {
-    context: activePreset.context,
+    context,
     schema: activePreset.schema
   };
   

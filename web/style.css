@@ -405,6 +405,108 @@ select:focus {
   color: var(--green-primary);
 }
 
+/* Editable Context Panel */
+.context-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 14px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+  flex: 0 0 auto;
+}
+
+.context-panel summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-main);
+  user-select: none;
+}
+
+.context-panel summary::-webkit-details-marker {
+  display: none;
+}
+
+.context-panel summary::before {
+  content: "▸";
+  color: var(--text-subtle);
+  transition: transform 0.15s ease;
+}
+
+.context-panel[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.context-hint {
+  font-size: 0.76rem;
+  font-weight: 500;
+  color: var(--text-subtle);
+}
+
+.context-hint.edited {
+  color: var(--green-primary);
+}
+
+.context-textarea {
+  width: 100%;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #f8fafc;
+  color: var(--text-main);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  line-height: 1.6;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.context-textarea:hover {
+  border-color: var(--border-hover);
+}
+
+.context-textarea:focus-visible {
+  border-color: var(--text-main);
+  background: var(--bg-card);
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+}
+
+.context-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.btn-secondary {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  border-color: var(--border-hover);
+  color: var(--text-main);
+}
+
+.btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 @media (max-width: 800px) {
   .grid {
     grid-template-columns: 1fr;
