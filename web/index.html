@@ -19,6 +19,19 @@
       </button>
     </div>
 
+    <!-- Editable Context Document -->
+    <details class="context-panel" id="context-panel">
+      <summary>
+        <span>Context Document</span>
+        <span class="context-hint" id="context-hint">edit to try your own input</span>
+      </summary>
+      <textarea id="context-input" class="context-textarea" rows="8" spellcheck="false"
+                aria-label="Context document sent to both models"></textarea>
+      <div class="context-actions">
+        <button id="btn-reset-context" class="btn-secondary" type="button">Reset to preset</button>
+      </div>
+    </details>
+
     <!-- Speedup Summary Banner (Shows after run) -->
     <div id="summary-bar" class="summary-bar hidden">
       <div class="summary-pill">
