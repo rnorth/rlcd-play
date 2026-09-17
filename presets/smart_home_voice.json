@@ -1,0 +1,57 @@
+{
+  "id": "smart_home_voice",
+  "title": "Smart Home Voice Command Router (3 Fields)",
+  "description": "Reduces a free-text transcribed home automation request to three decisions: whether it holds more than one command, which area it targets, and which verb it invokes.",
+  "context": "turn on the lights in front of the house",
+  "schema": {
+    "multiple_commands": {
+      "type": "boolean",
+      "description": "Whether the request contains more than one distinct command"
+    },
+    "command_area": {
+      "type": "enum",
+      "description": "Area of the home the command concerns",
+      "choices": [
+        "LIVING_ROOM",
+        "BEDROOM",
+        "KITCHEN",
+        "HALLWAY",
+        "PORCH",
+        "GARAGE",
+        "CONSERVATORY",
+        "NURSERY",
+        "BATHROOM",
+        "BACK_GARDEN",
+        "WHOLE_HOUSE"
+      ]
+    },
+    "command_verb": {
+      "type": "enum",
+      "description": "Action the command asks for",
+      "choices": [
+        "ON",
+        "OFF",
+        "DIM",
+        "OPEN",
+        "CLOSE",
+        "LOCK",
+        "UNLOCK",
+        "WARMER",
+        "COOLER",
+        "START",
+        "STOP",
+        "MUTE",
+        "QUERY"
+      ]
+    },
+    "command_domain": {
+      "type": "enum",
+      "description": "Domain of the command (e.g., lighting, climate, switch)",
+      "choices": [
+        "LIGHT",
+        "CLIMATE",
+        "SWITCH"
+      ]
+    }
+  }
+}
