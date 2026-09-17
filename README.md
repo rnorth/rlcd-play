@@ -102,8 +102,8 @@ In structured extraction and classification, field values belong to bounded cand
 Clone the repository and install dependencies:
 
 ```bash
-git clone https://github.com/your-org/parallel-constrained-decoding.git
-cd parallel-constrained-decoding
+git clone https://github.com/rnorth/rlcd-play.git
+cd rlcd-play
 
 python3 -m venv .venv
 source .venv/bin/activate
