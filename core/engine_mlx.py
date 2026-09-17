@@ -288,6 +288,75 @@ def stream_naive_generation(
     }
 
 
+def _resolve_collision_mlx(model, b_cache, base_len, row, suffix_len, field_logits,
+                           seqs, quote_id, temperature):
+    """
+    Resolves one field whose choices share a first token.
+
+    A single token cannot separate e.g. GARAGE from GARDEN, so the decision is walked
+    one token deeper at a time, each step constrained to tokens that keep at least one
+    declared choice reachable, until a single choice survives. A closing quote acts as
+    each choice's terminator so a choice that is a strict prefix of another (ON vs
+    ONLINE) stays separable. Costs one 1-token forward pass per extra token of depth,
+    and only for the ambiguous group.
+
+    Returns (winner_idx, winner_prob, all_probs, extra_passes).
+    """
+    # Own view of this row's cache, truncated past the batch padding so the
+    # continuation attends to this field's suffix and nothing after it.
+    true_len = base_len + suffix_len
+    f_cache = []
+    for c in b_cache:
+        nc = copy.copy(c)
+        if hasattr(c, "keys") and c.keys is not None:
+            nc.keys = c.keys[row:row + 1, :, :true_len, :]
+            nc.values = c.values[row:row + 1, :, :true_len, :]
+            nc.offset = true_len
+        f_cache.append(nc)
+
+    alive = list(range(len(seqs)))
+    cur_logits = field_logits
+    path_prob = 1.0
+    step = 0
+    extra_passes = 0
+
+    # Choices are unique (enforced in FieldDefinition), so the walk always separates
+    # them within the longest choice's length; the cap is a guard against a future
+    # change letting two choices tokenize identically and spinning here forever.
+    max_steps = max((len(s) for s in seqs), default=0) + 1
+
+    while len(alive) > 1 and step < max_steps:
+        branches = {}
+        for ci in alive:
+            nxt = seqs[ci][step] if step < len(seqs[ci]) else quote_id
+            branches.setdefault(nxt, []).append(ci)
+
+        if len(branches) > 1:
+            tok_ids = list(branches)
+            scores = mx.array([float(cur_logits[t]) for t in tok_ids]) / max(temperature, 1e-4)
+            probs = mx.softmax(scores)
+            mx.eval(probs)
+            k = int(mx.argmax(probs))
+            path_prob *= float(probs[k])
+            chosen = tok_ids[k]
+        else:
+            chosen = next(iter(branches))
+
+        alive = branches[chosen]
+        step += 1
+        if len(alive) > 1:
+            out_step = model(mx.array([[chosen]]), cache=f_cache)
+            mx.eval(out_step)
+            cur_logits = out_step[0, -1, :]
+            extra_passes += 1
+
+    w_idx = alive[0]
+    spread = (1.0 - path_prob) / max(len(seqs) - 1, 1)
+    all_probs = [spread] * len(seqs)
+    all_probs[w_idx] = path_prob
+    return w_idx, path_prob, all_probs, extra_passes
+
+
 @gpu_locked
 def run_parallel_generation(
     context: str,
@@ -310,7 +379,6 @@ def run_parallel_generation(
     field_items = meta["field_items"]
     suffix_lengths = meta["suffix_lengths"]
     cands_per_field = meta["cands_per_field"]
-    prefixes = meta["prefixes"]
     has_collisions = meta["has_collisions"]
     suffixes_batch = meta["suffixes_batch"]
     M = suffixes_batch.shape[0]
@@ -355,6 +423,8 @@ def run_parallel_generation(
     # 5. Extract logits and compute calibrated decisions
     parsed_json = {}
     field_telemetry = {}
+    deferred = []
+    collision_passes = 0
     
     for i, (fname, fdef) in enumerate(field_items):
         decision_idx = suffix_lengths[i] - 1
@@ -373,51 +443,10 @@ def run_parallel_generation(
             raw_choice = ["true", "false"][w_idx] if fdef.field_type == "boolean" else fdef.choices[w_idx]
             val = (raw_choice.lower() == "true") if fdef.field_type == "boolean" else raw_choice
         else:
-            # Fast direct cache slice disambiguation (zero re-allocation)
-            f_cache = [copy.copy(c) for c in b_cache]
-            for ci, c in enumerate(b_cache):
-                if hasattr(c, "keys") and c.keys is not None:
-                    f_cache[ci].keys = c.keys[i:i+1, ...]
-                    f_cache[ci].values = c.values[i:i+1, ...]
-            
-            cur_logits = field_logits
-            gen_toks = []
-            probs_prod = 1.0
-            for _ in range(4):
-                nxt = int(mx.argmax(cur_logits))
-                nxt_str = tokenizer.decode([nxt])
-                p_tok = float(mx.softmax(cur_logits)[nxt])
-                probs_prod *= p_tok
-                if '"' in nxt_str or '\n' in nxt_str or ',' in nxt_str:
-                    break
-                gen_toks.append(nxt)
-                out_step = model(mx.array([[nxt]]), cache=f_cache)
-                mx.eval(out_step)
-                cur_logits = out_step[0, -1, :]
-            
-            prefix = prefixes[i]
-            gen_val = (prefix + tokenizer.decode(gen_toks)).replace('"', '').strip()
-            matched = None
-            for c in fdef.choices:
-                if gen_val.startswith(c) or c.startswith(gen_val):
-                    matched = c
-                    break
-            if matched is None:
-                digits = re.findall(r'\d+', gen_val)
-                if digits:
-                    target_idx = int(digits[0])
-                    if 0 <= target_idx < len(fdef.choices):
-                        matched = fdef.choices[target_idx]
-            if matched is None:
-                matched = fdef.choices[0]
-                
-            val = matched
-            w_idx = fdef.choices.index(matched)
-            w_prob = round(max(min(probs_prod, 0.9999), 0.75), 4)
-            
-            all_probs = [round((1.0 - w_prob) / max(len(fdef.choices) - 1, 1), 4)] * len(fdef.choices)
-            all_probs[w_idx] = w_prob
-            
+            # Needs full-sequence scoring; resolved together after this loop.
+            deferred.append((i, fname, fdef))
+            continue
+
         parsed_json[fname] = {
             "value": val,
             "prob": round(w_prob, 4)
@@ -437,6 +466,32 @@ def run_parallel_generation(
             "top_choices": scored_choices[:5]
         }
 
+    if deferred:
+        base_len = base_arr.shape[1]
+        for i, fname, fdef in deferred:
+            w_idx, w_prob, all_probs, extra = _resolve_collision_mlx(
+                model, b_cache, base_len, i, suffix_lengths[i],
+                suffix_out[i, suffix_lengths[i] - 1, :],
+                meta["choice_seqs"][i], meta["quote_id"], temperature
+            )
+            collision_passes += extra
+            val = fdef.choices[w_idx]
+            parsed_json[fname] = {"value": val, "prob": round(w_prob, 4)}
+            scored_choices = sorted(
+                ({"choice": c, "probability": round(p, 4)} for c, p in zip(fdef.choices, all_probs)),
+                key=lambda x: x["probability"], reverse=True
+            )
+            field_telemetry[fname] = {
+                "value": val,
+                "type": fdef.field_type,
+                "confidence": round(w_prob, 4),
+                "cardinality": fdef.cardinality,
+                "top_choices": scored_choices[:5]
+            }
+        # Restore declared field order after out-of-band resolution
+        parsed_json = {n: parsed_json[n] for n, _ in field_items}
+        field_telemetry = {n: field_telemetry[n] for n, _ in field_items}
+
     total_elapsed_ms = (time.perf_counter() - t0) * 1000
 
     return {
@@ -445,7 +500,7 @@ def run_parallel_generation(
         "prefill_ms": round(t_prefill, 2),
         "suffix_eval_ms": round(t_suffix_eval, 2),
         "total_tokens_generated": 0,
-        "sequential_forward_passes": 1,
+        "sequential_forward_passes": 1 + collision_passes,
         "is_valid_json": True,
         "schema_match": True,
         "parsed_json": parsed_json,

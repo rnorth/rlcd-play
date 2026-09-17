@@ -20,6 +20,9 @@ class FieldDefinition:
                 raise ValueError(f"Field '{name}' of type enum must have choices defined.")
             if len(choices) > 255:
                 raise ValueError(f"Field '{name}' exceeds maximum cardinality of 255 choices (got {len(choices)}).")
+            if len(set(choices)) != len(choices):
+                dupes = sorted({c for c in choices if choices.count(c) > 1})
+                raise ValueError(f"Field '{name}' has duplicate choices: {dupes}. Choices must be distinct.")
             self.choices = choices
         else:
             raise ValueError(f"Unsupported field type '{field_type}'. Supported types: 'boolean' and 'enum'.")
@@ -144,6 +147,9 @@ class StructuredSchema:
         prefixes = []
         has_collisions = []
         
+        quote_id = tokenizer.encode('"', add_special_tokens=False)[0]
+        seqs_per_field = []
+
         for fname, fdef in field_items:
             if fdef.field_type == "boolean":
                 suffix = f'  "{fname}": '
@@ -151,19 +157,23 @@ class StructuredSchema:
                     tokenizer.encode("true", add_special_tokens=False)[0],
                     tokenizer.encode("false", add_special_tokens=False)[0]
                 ]
+                seqs = [[c] for c in cands]
                 prefix = ""
             else:
                 prefix = os.path.commonprefix(fdef.choices)
                 suffix = f'  "{fname}": "{prefix}'
                 cands = []
+                seqs = []
                 for c in fdef.choices:
                     rem = c[len(prefix):]
                     c_toks = tokenizer.encode(rem, add_special_tokens=False)
-                    cands.append(c_toks[0] if c_toks else tokenizer.encode('"', add_special_tokens=False)[0])
+                    seqs.append(c_toks)
+                    cands.append(c_toks[0] if c_toks else quote_id)
             toks = tokenizer.encode(suffix, add_special_tokens=False)
             suffix_tok_lists.append(toks)
             suffix_lengths.append(len(toks))
             cands_per_field.append(cands)
+            seqs_per_field.append(seqs)
             prefixes.append(prefix)
             has_collisions.append(len(set(cands)) < len(cands))
             
@@ -182,7 +192,10 @@ class StructuredSchema:
             "cands_per_field": cands_per_field,
             "prefixes": prefixes,
             "has_collisions": has_collisions,
-            "suffixes_batch": suffixes_batch
+            "suffixes_batch": suffixes_batch,
+            "suffix_tok_lists": suffix_tok_lists,
+            "choice_seqs": seqs_per_field,
+            "quote_id": quote_id
         }
         return self._parallel_metadata
 
