@@ -17,11 +17,17 @@ spaces:
 - drinkmoonshine/parallel-constrained-decoding
 ---
 
+## Note about this fork
+
+This is a fork of https://huggingface.co/harshatheg/Qwen-2.5-1B-RLCD - all credit for the work of creating that belongs to [harshatheg](https://huggingface.co/harshatheg).
+This personal fork includes a couple of tweaks which I'd intend to contribute back:
+* a fix for a problem when multiple possible enum values shared a common first token - this caused the first value to always be selected, even if incorrect
+* a tweak to the demo web UI allowing input context to be edited easily.
+
+---
+
 # Parallel Constrained Decoding for Apple Silicon
 
-[![Open in Spaces](https://huggingface.co/datasets/huggingface/badges/resolve/main/open-in-hf-spaces-sm.svg)](https://huggingface.co/spaces/drinkmoonshine/parallel-constrained-decoding)
-
-> **Live Demo**: Try the side-by-side comparison live on Hugging Face Spaces: [drinkmoonshine/parallel-constrained-decoding](https://huggingface.co/spaces/drinkmoonshine/parallel-constrained-decoding).
 
 A high-throughput inference engine for structured information extraction, decision routing, and categorical classification on Apple Silicon using MLX.
 
