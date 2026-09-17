@@ -376,8 +376,9 @@ async function runComparison() {
 
   const context = els.contextInput.value.trim();
   if (!context) {
-    els.contextInput.focus();
+    // Open before focusing: a textarea inside a closed <details> is not focusable.
     $('context-panel').open = true;
+    els.contextInput.focus();
     return;
   }
 

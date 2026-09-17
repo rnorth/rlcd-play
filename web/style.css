@@ -405,12 +405,6 @@ select:focus {
   color: var(--green-primary);
 }
 
-@media (max-width: 800px) {
-  .grid {
-    grid-template-columns: 1fr;
-  }
-}
-
 /* Editable Context Panel */
 .context-panel {
   background: var(--bg-card);
@@ -477,9 +471,11 @@ select:focus {
   border-color: var(--border-hover);
 }
 
-.context-textarea:focus {
+.context-textarea:focus-visible {
   border-color: var(--text-main);
   background: var(--bg-card);
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
 }
 
 .context-actions {
@@ -509,4 +505,10 @@ select:focus {
 .btn-secondary:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+@media (max-width: 800px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
 }
